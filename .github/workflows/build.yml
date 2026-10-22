@@ -28,20 +28,17 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: "macOS Monterey 12 avx"
-            os: macos-12
+          - name: "macOS Sonoma 14 avx"
+            os: macos-14
             arch: "core-avx-i"
-          - name: "macOS Ventura 13 avx"
-            os: macos-13
+          - name: "macOS Sequoia 15 avx"
+            os: macos-15
             arch: "core-avx-i"
-          - name: "macOS Ventura 13 x86-64"
-            os: macos-13
+          - name: "macOS Sequoia 15 x86-64"
+            os: macos-15
             arch: "x86-64"
-          - name: "macOS Monterey 12 avx"
-            os: macos-12
-            arch: "core-avx-i"
-          - name: "macOS Monterey 12 x86-64"
-            os: macos-12
+          - name: "macOS Sonoma 14 x86-64"
+            os: macos-14
             arch: "x86-64"
           - name: "macOS Sonoma 14 M1"
             os: macos-14
@@ -60,7 +57,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -71,15 +68,15 @@ jobs:
 
       - name: Cache Qt
         id: cache-qt
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: "${{ github.workspace }}/qt/"
           key: qt-${{ matrix.os }}-${{ env.qt_version }}
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        uses: jurplel/install-qt-action@v4
         with:
-          cached: ${{ steps.cache-qt.outputs.cache-hit }}
           version: ${{ env.qt_version }}
           dir: "${{ github.workspace }}/qt/"
 
@@ -87,11 +84,11 @@ jobs:
         shell: bash
         id: ccache_vars
         run: |-
-          echo "::set-output name=hash::$(echo ${{ env.ccache_compilercheck }})"
-          echo "::set-output name=timestamp::$(date '+%Y-%m-%dT%H.%M.%S')"
+          echo "hash=${{ env.ccache_compilercheck }}" >> "$GITHUB_OUTPUT"
+          echo "timestamp=$(date '+%Y-%m-%dT%H.%M.%S')" >> "$GITHUB_OUTPUT"
 
       - name: Cache-op for build-cache through ccache
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ${{ env.ccache_dir }}
           key: ccache-${{ matrix.os }}-${{ steps.ccache_vars.outputs.hash }}-${{ github.ref }}-${{ steps.ccache_vars.outputs.timestamp }}
@@ -177,7 +174,7 @@ jobs:
           mv translateLocally.dmg translateLocally.${{ matrix.os }}.${{ matrix.arch }}.dmg
           ls *.dmg
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v7
         with:
           name: translateLocally.latest.${{ matrix.os }}.${{ matrix.arch }}.dmg
           path: ${{github.workspace}}/build/translateLocally.*.dmg
@@ -190,20 +187,20 @@ jobs:
             os: ubuntu-22.04
             arch: "core-avx-i"
             qtdeps: "libxkbcommon-x11-dev libvulkan-dev libgl1-mesa-dev qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools qt6-translations-l10n libqt6svg6-dev"
-          - name: "Ubuntu 20.04 avx"
-            os: ubuntu-20.04
+          - name: "Ubuntu 24.04 avx"
+            os: ubuntu-24.04
             arch: "core-avx-i"
             qtdeps: "qttools5-dev qtbase5-dev libqt5svg5-dev"
-          - name: "Ubuntu 20.04 x86-64"
-            os: ubuntu-20.04
+          - name: "Ubuntu 24.04 x86-64"
+            os: ubuntu-24.04
             arch: "x86-64"
             qtdeps: "qttools5-dev qtbase5-dev libqt5svg5-dev"
           # avx2 build is not any faster, since the critical codepath (intgemm) already uses the most optimal codepath for the user's PC
           # - name: "Ubuntu 18.04 avx2"
           #   os: ubuntu-18.04
           #   arch: "core-avx2"
-          # - name: "Ubuntu 20.04 avx2"
-          #   os: ubuntu-20.04
+          # - name: "Ubuntu 22.04 avx2"
+          #   os: ubuntu-22.04
           #   arch: "core-avx2"
       fail-fast: false
 
@@ -212,7 +209,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -224,20 +221,20 @@ jobs:
         # https://software.intel.com/content/www/us/en/develop/articles/installing-intel-free-libs-and-python-apt-repo.html
       - name: Install MKL
         run: |
-          wget -qO- "https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB" | sudo apt-key add -
-          sudo sh -c "echo deb https://apt.repos.intel.com/mkl all main > /etc/apt/sources.list.d/intel-mkl.list"
-          sudo apt-get update -o Dir::Etc::sourcelist="/etc/apt/sources.list.d/intel-mkl.list"
+          curl -fsSL "https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB" | gpg --dearmor | sudo tee /usr/share/keyrings/intel-mkl-archive-keyring.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/intel-mkl-archive-keyring.gpg] https://apt.repos.intel.com/mkl all main" | sudo tee /etc/apt/sources.list.d/intel-mkl.list
+          sudo apt-get update
           sudo apt-get install -y --no-install-recommends intel-mkl-64bit-2020.0-088
 
       - name: Generate ccache_vars for ccache based on machine
         shell: bash
         id: ccache_vars
         run: |-
-          echo "::set-output name=hash::$(echo ${{ env.ccache_compilercheck }})"
-          echo "::set-output name=timestamp::$(date '+%Y-%m-%dT%H.%M.%S')"
+          echo "hash=${{ env.ccache_compilercheck }}" >> "$GITHUB_OUTPUT"
+          echo "timestamp=$(date '+%Y-%m-%dT%H.%M.%S')" >> "$GITHUB_OUTPUT"
 
       - name: Cache-op for build-cache through ccache
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ${{ env.ccache_dir }}
           key: ccache-${{ matrix.os }}-${{ steps.ccache_vars.outputs.hash }}-${{ github.ref }}-${{ steps.ccache_vars.outputs.timestamp }}
@@ -297,7 +294,7 @@ jobs:
           ls deb/*.deb
           dpkg -I deb/*.deb
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v7
         with:
           name: translateLocally.latest.${{ matrix.os }}.${{ matrix.arch }}.deb
           path: ${{github.workspace}}/build/deb/*.deb
@@ -313,7 +310,7 @@ jobs:
 
   #   steps:
   #     - name: Checkout
-  #       uses: actions/checkout@v3
+  #       uses: actions/checkout@v7
   #       with:
   #         submodules: recursive
 
@@ -355,7 +352,7 @@ jobs:
   #         ls deb/*.deb
   #         dpkg -I deb/*.deb
 
-  #     - uses: actions/upload-artifact@v3
+  #     - uses: actions/upload-artifact@v7
   #       with:
   #         name: translateLocally.latest.${{ matrix.os }}.${{ matrix.arch }}.deb
   #         path: ${{github.workspace}}/build/deb/*.deb
@@ -364,14 +361,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: "Windows 2019 avx"
-            os: windows-2019
-            arch: "core-avx-i"
           - name: "Windows 2022 avx"
             os: windows-2022
             arch: "core-avx-i"
-          - name: "Windows 2019 x86-64"
-            os: windows-2019
+          - name: "Windows 2022 x86-64"
+            os: windows-2022
             arch: "x86-64"
           # avx2 build is not any faster, since the critical codepath (intgemm) already uses the most optimal codepath for the user's PC
           # - name: "Windows 2019 avx2"
@@ -387,7 +381,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -401,7 +395,7 @@ jobs:
         shell: powershell
 
       - name: Cache vcpkg
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         env:
           cache-name: cache-vcpkg
         with:
@@ -452,29 +446,30 @@ jobs:
           mv translateLocally.exe translateLocally.${{ matrix.os }}.${{ matrix.arch }}.exe
         shell: powershell
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v7
         with:
           name: translateLocally.latest.${{ matrix.os }}.${{ matrix.arch }}.exe
           path: ${{github.workspace}}/build/Release/*.exe
 
-  # Try to upload a release using https://github.com/marvinpinto/actions/issues/177#issuecomment-917605585 as a model
   release:
     name: Release build
     runs-on: ubuntu-latest
     needs: [build-macos, build-ubuntu, build-windows]
     if: github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v8
 
       - name: Update GitHub prerelease
-        uses: marvinpinto/action-automatic-releases@latest
+        uses: softprops/action-gh-release@v3
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          automatic_release_tag: latest
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: latest
           prerelease: true
-          title: "Latest Build"
+          name: "Latest Build"
           files: |
-            /home/runner/work/translateLocally/translateLocally/*.dmg/*.dmg
-            /home/runner/work/translateLocally/translateLocally/*.deb/*.deb
-            /home/runner/work/translateLocally/translateLocally/*.exe/*.exe
+            translateLocally.latest.*.dmg/*.dmg
+            translateLocally.latest.*.deb/*.deb
+            translateLocally.latest.*.exe/*.exe
